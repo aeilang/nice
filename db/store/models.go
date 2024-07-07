@@ -5,41 +5,69 @@
 package store
 
 import (
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql/driver"
+	"fmt"
+	"time"
 )
 
-type Order struct {
-	ID        int32            `db:"id" json:"id"`
-	UserID    int32            `db:"user_id" json:"user_id"`
-	Total     pgtype.Numeric   `db:"total" json:"total"`
-	Status    string           `db:"status" json:"status"`
-	Address   string           `db:"address" json:"address"`
-	CreatedAt pgtype.Timestamp `db:"created_at" json:"created_at"`
+type UserRole string
+
+const (
+	UserRoleAdmin    UserRole = "admin"
+	UserRoleUser     UserRole = "user"
+	UserRoleForbiden UserRole = "forbiden"
+)
+
+func (e *UserRole) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = UserRole(s)
+	case string:
+		*e = UserRole(s)
+	default:
+		return fmt.Errorf("unsupported scan type for UserRole: %T", src)
+	}
+	return nil
 }
 
-type OrderItem struct {
-	ID        int32          `db:"id" json:"id"`
-	OrderID   int32          `db:"order_id" json:"order_id"`
-	ProductID int32          `db:"product_id" json:"product_id"`
-	Quantity  int32          `db:"quantity" json:"quantity"`
-	Price     pgtype.Numeric `db:"price" json:"price"`
+type NullUserRole struct {
+	UserRole UserRole `json:"user_role"`
+	Valid    bool     `json:"valid"` // Valid is true if UserRole is not NULL
 }
 
-type Product struct {
-	ID          int32            `db:"id" json:"id"`
-	Name        string           `db:"name" json:"name"`
-	Description string           `db:"description" json:"description"`
-	Image       string           `db:"image" json:"image"`
-	Price       pgtype.Numeric   `db:"price" json:"price"`
-	Quantity    int32            `db:"quantity" json:"quantity"`
-	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
+// Scan implements the Scanner interface.
+func (ns *NullUserRole) Scan(value interface{}) error {
+	if value == nil {
+		ns.UserRole, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.UserRole.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullUserRole) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.UserRole), nil
+}
+
+type Novel struct {
+	ID        int32     `db:"id" json:"id"`
+	Title     string    `db:"title" json:"title"`
+	Keyword   string    `db:"keyword" json:"keyword"`
+	Short     string    `db:"short" json:"short"`
+	Content   string    `db:"content" json:"content"`
+	AuthorID  int32     `db:"author_id" json:"author_id"`
+	CreatedAt time.Time `db:"created_at" json:"created_at"`
 }
 
 type User struct {
-	ID        int32            `db:"id" json:"id"`
-	Firstname string           `db:"firstname" json:"firstname"`
-	Lastname  string           `db:"lastname" json:"lastname"`
-	Email     string           `db:"email" json:"email"`
-	Password  string           `db:"password" json:"password"`
-	CreatedAt pgtype.Timestamp `db:"created_at" json:"created_at"`
+	ID        int32     `db:"id" json:"id"`
+	Name      string    `db:"name" json:"name"`
+	Email     string    `db:"email" json:"email"`
+	Password  string    `db:"password" json:"password"`
+	Role      UserRole  `db:"role" json:"role"`
+	CreatedAt time.Time `db:"created_at" json:"created_at"`
 }

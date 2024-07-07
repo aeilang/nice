@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/aeilang/nice/auth"
 	"github.com/aeilang/nice/configs"
@@ -12,7 +13,6 @@ import (
 	"github.com/aeilang/nice/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (s *Server) HandleLogin(w http.ResponseWriter, r *http.Request) {
@@ -78,10 +78,10 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	u, err := s.Querier.CreateUser(r.Context(), store.CreateUserParams{
-		Firstname: user.FirstName,
-		Lastname:  user.LastName,
-		Email:     user.Email,
-		Password:  hashedPassword,
+		Name:     user.UserName,
+		Email:    user.Email,
+		Password: hashedPassword,
+		Role:     "user",
 	})
 
 	if err != nil {
@@ -90,9 +90,8 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.WriteJSON(w, http.StatusCreated, RegisterResponse{
-		FirstName: u.Firstname,
-		LastName:  u.Lastname,
-		Email:     u.Email,
+		Username: u.Name,
+		Email:    u.Email,
 	})
 }
 
@@ -117,10 +116,10 @@ func (s *Server) HandleGetUser(w http.ResponseWriter, r *http.Request) {
 
 	utils.WriteJSON(w, http.StatusOK, GetUserResponse{
 		Id:        u.ID,
-		FirstName: u.Firstname,
-		LastName:  u.Lastname,
+		Username:  u.Name,
 		Email:     u.Email,
 		CreatedAt: u.CreatedAt,
+		Role:      string(u.Role),
 	})
 }
 
@@ -130,22 +129,20 @@ type LoginUserPayload struct {
 }
 
 type RegisterUserPayload struct {
-	FirstName string `json:"firstname" validate:"required"`
-	LastName  string `json:"lastname" validate:"required"`
-	Email     string `json:"email" validate:"required,email"`
-	Password  string `json:"password" validate:"required,min=3,max=130"`
+	UserName string `json:"username" validate:"required"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=3,max=130"`
 }
 
 type RegisterResponse struct {
-	FirstName string `json:"firstname"`
-	LastName  string `json:"lastname"`
-	Email     string `json:"email"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
 }
 
 type GetUserResponse struct {
-	Id        int32            `json:"id"`
-	FirstName string           `json:"firstname"`
-	LastName  string           `json:"lastname"`
-	Email     string           `json:"eamil"`
-	CreatedAt pgtype.Timestamp `json:"created_at"`
+	Id        int32     `json:"id"`
+	Username  string    `json:"username"`
+	Email     string    `json:"eamil"`
+	CreatedAt time.Time `json:"created_at"`
+	Role      string    `json:"role"`
 }

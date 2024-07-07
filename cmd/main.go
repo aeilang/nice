@@ -1,7 +1,9 @@
 package main
 
 import (
-	"context"
+	"database/sql"
+	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/aeilang/nice/auth"
@@ -10,23 +12,20 @@ import (
 	"github.com/aeilang/nice/server"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/lib/pq"
 )
 
 func main() {
-	dbConfig, err := configs.DBConfig()
-	if err != nil {
-		panic(err)
-	}
-	pool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
+	conf := configs.Envs
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", conf.DBUser, conf.DBPassword, conf.PublicHost, conf.Port, conf.DBName)
 
+	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
-	defer pool.Close()
 
-	querier := store.New(pool)
-	serv := server.New(querier, pool)
+	querier := store.New(db)
+	serv := server.New(querier)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -52,18 +51,6 @@ func route(r *chi.Mux, serv *server.Server) *chi.Mux {
 			r.Get("/{id}", serv.HandleGetUser)
 		})
 
-		// product
-		r.Route("/products", func(r chi.Router) {
-			r.Get("/{id}", serv.HandleGetProduct)
-			r.Get("/", serv.HandleGetProducts)
-			r.Post("/", serv.HandleCreateProduct)
-
-		})
-
-		// order
-		r.Route("/order", func(r chi.Router) {
-			r.Post("/", serv.HandleCheckout)
-		})
 	})
 
 	return r

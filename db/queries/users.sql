@@ -1,6 +1,6 @@
 -- name: CreateUser :one
 insert into users (
-  firstname, lastname, email, password
+  name, email, password, role 
 ) values ($1, $2, $3, $4)
 returning *;
 

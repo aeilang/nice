@@ -1,12 +1,9 @@
 package configs
 
 import (
-	"fmt"
 	"os"
 	"strconv"
-	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
@@ -18,13 +15,6 @@ type Config struct {
 	DBName                 string
 	JWTSecret              string
 	JWTExperationInMinites int
-
-	MaxConns                   int
-	MinConns                   int
-	MaxConnLifeTimeInMinites   int
-	MaxConnIdleTimeInMinites   int
-	HealthCheckPeriodInMinites int
-	ConnectTimeoutInSeconds    int
 }
 
 var Envs = initConfig()
@@ -40,13 +30,6 @@ func initConfig() Config {
 		DBName:                 getEnv("DB_NAME", "test_db"),
 		JWTSecret:              getEnv("JWT_SECRET", "not-so-secret-now-is-it?"),
 		JWTExperationInMinites: getEnvAsInt("JWT_EXPIRATION_IN_MIMITES", 3600*24*7),
-
-		MaxConns:                   getEnvAsInt("MAX_CONNS", 4),
-		MinConns:                   getEnvAsInt("MIN_CONNS", 1),
-		MaxConnLifeTimeInMinites:   getEnvAsInt("MAX_CONN_LIFE_TIME_IN_MINITES", 60),
-		MaxConnIdleTimeInMinites:   getEnvAsInt("MAX_CONN_IDLE_TIME_IN_MINITES", 30),
-		HealthCheckPeriodInMinites: getEnvAsInt("HEALTH_CHECK_PERIOD_IN_MINITES", 1),
-		ConnectTimeoutInSeconds:    getEnvAsInt("CONNECT_TIME_OUT_IN_MINITES", 5),
 	}
 }
 
@@ -68,24 +51,4 @@ func getEnvAsInt(key string, fallback int) int {
 	}
 
 	return fallback
-}
-
-func DBConfig() (*pgxpool.Config, error) {
-	env := initConfig()
-	connString := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		env.DBUser, env.DBPassword, env.PublicHost, env.Port, env.DBName)
-
-	dbConfig, err := pgxpool.ParseConfig(connString)
-	if err != nil {
-		return nil, err
-	}
-
-	dbConfig.MaxConns = int32(env.MaxConns)
-	dbConfig.MinConns = int32(env.MinConns)
-	dbConfig.MaxConnLifetime = time.Duration(env.MaxConnLifeTimeInMinites) * time.Minute
-	dbConfig.MaxConnIdleTime = time.Duration(env.MaxConnIdleTimeInMinites) * time.Minute
-	dbConfig.HealthCheckPeriod = time.Duration(env.HealthCheckPeriodInMinites) * time.Minute
-	dbConfig.ConnConfig.ConnectTimeout = time.Duration(env.ConnectTimeoutInSeconds) * time.Second
-
-	return dbConfig, nil
 }

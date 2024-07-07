@@ -11,70 +11,70 @@ import (
 
 const createUser = `-- name: CreateUser :one
 insert into users (
-  firstname, lastname, email, password
+  name, email, password, role 
 ) values ($1, $2, $3, $4)
-returning id, firstname, lastname, email, password, created_at
+returning id, name, email, password, role, created_at
 `
 
 type CreateUserParams struct {
-	Firstname string `db:"firstname" json:"firstname"`
-	Lastname  string `db:"lastname" json:"lastname"`
-	Email     string `db:"email" json:"email"`
-	Password  string `db:"password" json:"password"`
+	Name     string   `db:"name" json:"name"`
+	Email    string   `db:"email" json:"email"`
+	Password string   `db:"password" json:"password"`
+	Role     UserRole `db:"role" json:"role"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createUser,
-		arg.Firstname,
-		arg.Lastname,
+	row := q.queryRow(ctx, q.createUserStmt, createUser,
+		arg.Name,
 		arg.Email,
 		arg.Password,
+		arg.Role,
 	)
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.Firstname,
-		&i.Lastname,
+		&i.Name,
 		&i.Email,
 		&i.Password,
+		&i.Role,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-select id, firstname, lastname, email, password, created_at from users
+select id, name, email, password, role, created_at from users
 where email = $1 limit 1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
-	row := q.db.QueryRow(ctx, getUserByEmail, email)
+	row := q.queryRow(ctx, q.getUserByEmailStmt, getUserByEmail, email)
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.Firstname,
-		&i.Lastname,
+		&i.Name,
 		&i.Email,
 		&i.Password,
+		&i.Role,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-select id, firstname, lastname, email, password, created_at from users
+select id, name, email, password, role, created_at from users
 where id = $1 limit 1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
-	row := q.db.QueryRow(ctx, getUserByID, id)
+	row := q.queryRow(ctx, q.getUserByIDStmt, getUserByID, id)
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.Firstname,
-		&i.Lastname,
+		&i.Name,
 		&i.Email,
 		&i.Password,
+		&i.Role,
 		&i.CreatedAt,
 	)
 	return i, err

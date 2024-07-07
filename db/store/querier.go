@@ -9,16 +9,9 @@ import (
 )
 
 type Querier interface {
-	CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error)
-	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) (OrderItem, error)
-	CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
-	GetProductByID(ctx context.Context, id int32) (Product, error)
-	GetProducts(ctx context.Context) ([]Product, error)
-	GetProductsByIDs(ctx context.Context, dollar_1 []int32) ([]Product, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id int32) (User, error)
-	UpdateProduct(ctx context.Context, arg UpdateProductParams) error
 }
 
 var _ Querier = (*Queries)(nil)
