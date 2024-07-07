@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -13,6 +14,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
+	"gopkg.in/gomail.v2"
 )
 
 func main() {
@@ -24,22 +27,37 @@ func main() {
 		log.Fatal(err)
 	}
 
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     conf.RedisAddr,
+		Password: "",
+		DB:       0,
+	})
+
+	if _, err := rdb.Ping(context.Background()).Result(); err != nil {
+		log.Fatal(err)
+	}
+
+	mail := gomail.NewDialer(conf.MailHost, conf.MailPort, conf.MailUsername, conf.MailPassword)
+
 	querier := store.New(db)
-	serv := server.New(querier)
+	serv := server.New(querier, rdb, mail)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
+	r.Use(CORS)
 
 	route(r, serv)
 
-	http.ListenAndServe(":3000", r)
+	http.ListenAndServe(":8888", r)
 }
 
 func route(r *chi.Mux, serv *server.Server) *chi.Mux {
 	// public
 	r.Group(func(r chi.Router) {
 		r.Post("/login", serv.HandleLogin)
-		r.Post("/regis", serv.HandleRegister)
+		r.Post("/register", serv.HandleRegister)
+		r.Post("/verify", serv.HandleSendVerifiCode)
+		r.Post("/forget", serv.HandleChangePassword)
 	})
 
 	// protected
@@ -54,4 +72,20 @@ func route(r *chi.Mux, serv *server.Server) *chi.Mux {
 	})
 
 	return r
+}
+
+func CORS(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	}
+	return http.HandlerFunc(fn)
 }

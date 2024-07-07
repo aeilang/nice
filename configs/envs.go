@@ -8,13 +8,21 @@ import (
 )
 
 type Config struct {
-	PublicHost             string
-	Port                   string
-	DBUser                 string
-	DBPassword             string
-	DBName                 string
+	PublicHost string
+	Port       string
+	DBUser     string
+	DBPassword string
+	DBName     string
+
 	JWTSecret              string
 	JWTExperationInMinites int
+
+	RedisAddr string
+
+	MailHost     string
+	MailPort     int
+	MailUsername string
+	MailPassword string
 }
 
 var Envs = initConfig()
@@ -23,13 +31,21 @@ func initConfig() Config {
 	godotenv.Load()
 
 	return Config{
-		PublicHost:             getEnv("PUBLIC_HOST", "http://localhost"),
-		Port:                   getEnv("PORT", "8080"),
-		DBUser:                 getEnv("DB_USER", "root"),
-		DBPassword:             getEnv("DB_PASSWORD", "password"),
-		DBName:                 getEnv("DB_NAME", "test_db"),
+		PublicHost: getEnv("PUBLIC_HOST", "http://localhost"),
+		Port:       getEnv("PORT", "8080"),
+		DBUser:     getEnv("DB_USER", "root"),
+		DBPassword: getEnv("DB_PASSWORD", "password"),
+		DBName:     getEnv("DB_NAME", "test_db"),
+
 		JWTSecret:              getEnv("JWT_SECRET", "not-so-secret-now-is-it?"),
 		JWTExperationInMinites: getEnvAsInt("JWT_EXPIRATION_IN_MIMITES", 3600*24*7),
+
+		RedisAddr: getEnv("REDIS_ADDR", "localhost:6379"),
+
+		MailHost:     getEnv("MAIL_HOST", ""),
+		MailPort:     getEnvAsInt("MAIL_PORT", 0),
+		MailUsername: getEnv("MAIL_USERNAME", ""),
+		MailPassword: getEnv("MAIL_PASSWORD", ""),
 	}
 }
 

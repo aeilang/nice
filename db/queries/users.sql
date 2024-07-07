@@ -13,3 +13,7 @@ where email = $1 limit 1;
 select * from users
 where id = $1 limit 1;
 
+-- name: UpdatePasswordByEmail :exec
+update users
+set password = $1
+where email = $2;

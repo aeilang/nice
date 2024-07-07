@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/shopspring/decimal"
 )
 
 var errBadToken = errors.New("bad token")
@@ -62,14 +60,3 @@ func splitToken(token string) (string, error) {
 	return arr[1], nil
 }
 
-func ToNumeric(num decimal.Decimal) pgtype.Numeric {
-	return pgtype.Numeric{
-		Int:   num.BigInt(),
-		Exp:   num.Exponent(),
-		Valid: true,
-	}
-}
-
-func ToDecimal(num pgtype.Numeric) decimal.Decimal {
-	return decimal.NewFromBigInt(num.Int, num.Exp)
-}
