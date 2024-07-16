@@ -17,7 +17,8 @@ var userKey = struct{}{}
 
 type JwtPayload struct {
 	jwt.RegisteredClaims
-	UserID int `json:"user_id"`
+	Email string `json:"email"`
+	Role  string `json:"role"`
 }
 
 func WithJWTAuth(querier store.Querier) func(next http.Handler) http.Handler {
@@ -30,14 +31,14 @@ func WithJWTAuth(querier store.Querier) func(next http.Handler) http.Handler {
 				return
 			}
 
-			payload, err := validateJWT(tokenString)
+			payload, err := ValidateJWT(tokenString, configs.Envs.JWTAccessSecret)
 			if err != nil {
 				permissionDenied(w)
 				log.Println(err)
 				return
 			}
 
-			u, err := querier.GetUserByID(r.Context(), int32(payload.UserID))
+			u, err := querier.GetUserByEmail(context.Background(), payload.Email)
 			if err != nil {
 				log.Printf("failed to get user by id: %v", err)
 				permissionDenied(w)
@@ -45,7 +46,7 @@ func WithJWTAuth(querier store.Querier) func(next http.Handler) http.Handler {
 			}
 
 			ctx := r.Context()
-			ctx = context.WithValue(ctx, userKey, u.ID)
+			ctx = context.WithValue(ctx, userKey, u)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		}
@@ -54,25 +55,19 @@ func WithJWTAuth(querier store.Querier) func(next http.Handler) http.Handler {
 	}
 }
 
-func CreateJWT(secret []byte, userID int) (string, error) {
-	expiration := time.Duration(configs.Envs.JWTExperationInMinites*60) * time.Second
+func CreateJWT(secret string, email string, role string, expiration time.Duration) (string, error) {
 
 	claims := JwtPayload{
-		UserID: userID,
+		Email: email,
+		Role:  role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiration)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			NotBefore: jwt.NewNumericDate(time.Now()),
-			Issuer:    "lang",
-			Subject:   "lang",
-			ID:        "1",
-			Audience:  []string{"only myself"},
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	tokenString, err := token.SignedString(secret)
+	tokenString, err := token.SignedString([]byte(secret))
 	if err != nil {
 		return "", err
 	}
@@ -80,13 +75,13 @@ func CreateJWT(secret []byte, userID int) (string, error) {
 	return tokenString, nil
 }
 
-func validateJWT(tokenString string) (*JwtPayload, error) {
+func ValidateJWT(tokenString string, secret string) (*JwtPayload, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &JwtPayload{}, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
 
-		return []byte(configs.Envs.JWTSecret), nil
+		return []byte(secret), nil
 	})
 
 	if err != nil {
@@ -105,7 +100,7 @@ func permissionDenied(w http.ResponseWriter) {
 	utils.WriteError(w, http.StatusForbidden, fmt.Errorf("permission denied"))
 }
 
-func GetUserIDFromContext(ctx context.Context) (int, bool) {
-	userID, ok := ctx.Value(userKey).(int)
-	return userID, ok
+func GetUserFromContext(ctx context.Context) (store.User, bool) {
+	user, ok := ctx.Value(userKey).(store.User)
+	return user, ok
 }

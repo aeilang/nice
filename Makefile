@@ -1,15 +1,13 @@
-migration:
-	@migrate create -ext sql -dir migrations $(filter-out $@,$(MAKECMDGOALS))
 
 migration-up: migration-drop
-	@migrate -database "postgres://postgres:password@localhost:5432/test_db?sslmode=disable" -path migrations up
+	@migrate -database "postgres://postgres:password@localhost:5432/test_db?sslmode=disable" -path db/migrations up
 
 
 migration-down:
-	@migrate -database "postgres://postgres:password@localhost:5432/test_db?sslmode=disable" -path migrations down
+	@migrate -database "postgres://postgres:password@localhost:5432/test_db?sslmode=disable" -path db/migrations down
 
 migration-drop:
-	@migrate -database "postgres://postgres:password@localhost:5432/test_db?sslmode=disable" -path migrations drop -f
+	@migrate -database "postgres://postgres:password@localhost:5432/test_db?sslmode=disable" -path db/migrations drop -f
 
 
 postgres:

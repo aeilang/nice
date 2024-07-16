@@ -58,6 +58,7 @@ func route(r *chi.Mux, serv *server.Server) *chi.Mux {
 		r.Post("/register", serv.HandleRegister)
 		r.Post("/verify", serv.HandleSendVerifiCode)
 		r.Post("/forget", serv.HandleChangePassword)
+		r.Post("/refresh", serv.HandleRefreshToken)
 	})
 
 	// protected

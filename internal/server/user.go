@@ -11,7 +11,7 @@ import (
 
 	"github.com/aeilang/nice/auth"
 	"github.com/aeilang/nice/configs"
-	"github.com/aeilang/nice/db/store"
+	"github.com/aeilang/nice/internal/repository/store"
 	"github.com/aeilang/nice/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
@@ -34,23 +34,98 @@ func (s *Server) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	u, err := s.Querier.GetUserByEmail(r.Context(), user.Email)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid email or password"))
+		utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("用户邮箱不存在"))
 		return
 	}
 
 	if !auth.ComparePasswords(u.Password, []byte(user.Password)) {
-		utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid email or password"))
+		utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("密码不正确"))
 		return
 	}
 
-	secret := []byte(configs.Envs.JWTSecret)
-	token, err := auth.CreateJWT(secret, int(u.ID))
+	accessExpiration := time.Duration(configs.Envs.JWTAccessExperationInMinites) * time.Minute
+	accessToken, err := auth.CreateJWT(configs.Envs.JWTAccessSecret, u.Email, string(u.Role), accessExpiration)
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, map[string]string{"token": token})
+	refreshExpiration := time.Duration(configs.Envs.JWTRefreshExperationInHours) * time.Hour
+	refreshToken, err := auth.CreateJWT(configs.Envs.JWTRefreshSecret, u.Email, string(u.Role), refreshExpiration)
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	if err := s.Rdb.Set(context.Background(), u.Email, refreshToken, refreshExpiration).Err(); err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, LoginUserResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
+}
+
+func (s *Server) HandleRefreshToken(w http.ResponseWriter, r *http.Request) {
+	var token RefreshTokenPayload
+	if err := utils.ParseJSON(r, &token); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := utils.Validate.Struct(token); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	payload, err := auth.ValidateJWT(token.RefreshToken, configs.Envs.JWTRefreshSecret)
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("解析token错误"))
+		return
+	}
+
+	refreshToken, err := s.Rdb.Get(context.Background(), payload.Email).Result()
+	if err != nil || refreshToken != token.RefreshToken {
+		utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("refreshToken失效"))
+		return
+	}
+
+	u, err := s.Querier.GetUserByEmail(context.Background(), payload.Email)
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("邮箱不存在"))
+		return
+	}
+
+	accessExpiration := time.Duration(configs.Envs.JWTAccessExperationInMinites) * time.Minute
+	accessToken, err := auth.CreateJWT(configs.Envs.JWTAccessSecret, u.Email, string(u.Role), accessExpiration)
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	refreshExpiration := time.Duration(configs.Envs.JWTRefreshExperationInHours) * time.Hour
+	newRefreshToken, err := auth.CreateJWT(configs.Envs.JWTRefreshSecret, u.Email, string(u.Role), refreshExpiration)
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	if err := s.Rdb.Set(context.Background(), u.Email, newRefreshToken, refreshExpiration).Err(); err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, LoginUserResponse{
+		AccessToken:  accessToken,
+		RefreshToken: newRefreshToken,
+	})
+
+}
+
+type RefreshTokenPayload struct {
+	RefreshToken string `json:"refresh_token" validate:"required"`
 }
 
 func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
@@ -101,11 +176,30 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusCreated, RegisterResponse{
-		Username: u.Name,
-		Email:    u.Email,
-		Role:     string(u.Role),
+	accessExpiration := time.Duration(configs.Envs.JWTAccessExperationInMinites) * time.Minute
+	accessToken, err := auth.CreateJWT(configs.Envs.JWTAccessSecret, u.Email, string(u.Role), accessExpiration)
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	refreshExpiration := time.Duration(configs.Envs.JWTRefreshExperationInHours) * time.Hour
+	refreshToken, err := auth.CreateJWT(configs.Envs.JWTRefreshSecret, u.Email, string(u.Role), refreshExpiration)
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	if err := s.Rdb.Set(context.Background(), u.Email, refreshToken, refreshExpiration).Err(); err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, LoginUserResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
 	})
+
 }
 
 func (s *Server) HandleChangePassword(w http.ResponseWriter, r *http.Request) {
@@ -153,7 +247,36 @@ func (s *Server) HandleChangePassword(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
+func GetIp(ip string) string {
+	i := 0
+	for j := len(ip) - 1; j >= 0; j-- {
+		if ip[j] == ':' {
+			i = j
+			break
+		}
+	}
+
+	if i == 0 {
+		return "bad"
+	}
+
+	return ip[0:i]
+}
+
 func (s *Server) HandleSendVerifiCode(w http.ResponseWriter, r *http.Request) {
+	ip := r.RemoteAddr
+	if len(ip) == 0 || len(ip) > 30 {
+		utils.WriteError(w, http.StatusTooManyRequests, fmt.Errorf("too many request"))
+		return
+	}
+
+	ip = GetIp(ip)
+
+	if err := s.Rdb.Get(context.Background(), ip).Err(); err == nil {
+		utils.WriteError(w, http.StatusTooManyRequests, fmt.Errorf("too many reqeust"))
+		return
+	}
+
 	var payload SendVerifiCodePayload
 	if err := utils.ParseJSON(r, &payload); err != nil {
 		utils.WriteError(w, http.StatusBadRequest, err)
@@ -167,12 +290,17 @@ func (s *Server) HandleSendVerifiCode(w http.ResponseWriter, r *http.Request) {
 
 	code := strconv.Itoa(rand.Intn(9000) + 1000) // 1000 ~ 9999
 
+	if err := s.SendCode(payload.Email, code); err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, err)
+		return
+	}
+
 	if err := s.Rdb.Set(context.Background(), payload.Email, code, 2*time.Minute).Err(); err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	if err := s.SendCode(payload.Email, code); err != nil {
+	if err := s.Rdb.Set(context.Background(), ip, "wait for 1 mimnute", 1*time.Minute).Err(); err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -265,6 +393,11 @@ type RegisterUserPayload struct {
 	VerifiCode string `json:"verifi_code" validate:"required,min=4,max=4"`
 }
 
+type LoginUserResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
 type RegisterResponse struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
@@ -274,7 +407,7 @@ type RegisterResponse struct {
 type GetUserResponse struct {
 	Id        int32     `json:"id"`
 	Username  string    `json:"username"`
-	Email     string    `json:"eamil"`
+	Email     string    `json:"email"`
 	CreatedAt time.Time `json:"created_at"`
 	Role      string    `json:"role"`
 }

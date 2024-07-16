@@ -13,14 +13,14 @@ const createUser = `-- name: CreateUser :one
 insert into users (
   name, email, password, role 
 ) values ($1, $2, $3, $4)
-returning id, name, email, password, role, created_at
+returning id, name, email, password, role, created_at, updated_at
 `
 
 type CreateUserParams struct {
-	Name     string   `db:"name" json:"name"`
-	Email    string   `db:"email" json:"email"`
-	Password string   `db:"password" json:"password"`
-	Role     UserRole `db:"role" json:"role"`
+	Name     string `db:"name" json:"name"`
+	Email    string `db:"email" json:"email"`
+	Password string `db:"password" json:"password"`
+	Role     string `db:"role" json:"role"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -38,12 +38,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Password,
 		&i.Role,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-select id, name, email, password, role, created_at from users
+select id, name, email, password, role, created_at, updated_at from users
 where email = $1 limit 1
 `
 
@@ -57,12 +58,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Password,
 		&i.Role,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-select id, name, email, password, role, created_at from users
+select id, name, email, password, role, created_at, updated_at from users
 where id = $1 limit 1
 `
 
@@ -76,6 +78,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
 		&i.Password,
 		&i.Role,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

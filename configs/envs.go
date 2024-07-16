@@ -4,25 +4,29 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/aeilang/nice/utils"
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
-	PublicHost string
-	Port       string
-	DBUser     string
-	DBPassword string
-	DBName     string
+	PublicHost string `validate:"required"`
+	Port       string `validate:"required"`
+	DBUser     string `validate:"required"`
+	DBPassword string `validate:"required"`
+	DBName     string `validate:"required"`
 
-	JWTSecret              string
-	JWTExperationInMinites int
+	JWTAccessSecret              string `validate:"required"`
+	JWTAccessExperationInMinites int    `validate:"gte=0"`
 
-	RedisAddr string
+	JWTRefreshSecret            string `validate:"required"`
+	JWTRefreshExperationInHours int    `validate:"gte=0"`
 
-	MailHost     string
-	MailPort     int
-	MailUsername string
-	MailPassword string
+	RedisAddr string `validate:"required"`
+
+	MailHost     string `validate:"required"`
+	MailPort     int    `validate:"gte=0"`
+	MailUsername string `validate:"required,email"`
+	MailPassword string `validate:"required"`
 }
 
 var Envs = initConfig()
@@ -30,41 +34,50 @@ var Envs = initConfig()
 func initConfig() Config {
 	godotenv.Load()
 
-	return Config{
-		PublicHost: getEnv("PUBLIC_HOST", "http://localhost"),
-		Port:       getEnv("PORT", "8080"),
-		DBUser:     getEnv("DB_USER", "root"),
-		DBPassword: getEnv("DB_PASSWORD", "password"),
-		DBName:     getEnv("DB_NAME", "test_db"),
+	config := Config{
+		PublicHost: getEnv("PUBLIC_HOST"),
+		Port:       getEnv("PORT"),
+		DBUser:     getEnv("DB_USER"),
+		DBPassword: getEnv("DB_PASSWORD"),
+		DBName:     getEnv("DB_NAME"),
 
-		JWTSecret:              getEnv("JWT_SECRET", "not-so-secret-now-is-it?"),
-		JWTExperationInMinites: getEnvAsInt("JWT_EXPIRATION_IN_MIMITES", 3600*24*7),
+		JWTAccessSecret:              getEnv("JWT_ACCESS_SECRET"),
+		JWTAccessExperationInMinites: getEnvAsInt("JWT_ACCESS_EXPIRATION_IN_MINITES"),
 
-		RedisAddr: getEnv("REDIS_ADDR", "localhost:6379"),
+		JWTRefreshSecret:            getEnv("JWT_REFRESH_SECRET"),
+		JWTRefreshExperationInHours: getEnvAsInt("JWT_REFRESH_EXPIRATION_IN_HOURS"),
 
-		MailHost:     getEnv("MAIL_HOST", ""),
-		MailPort:     getEnvAsInt("MAIL_PORT", 0),
-		MailUsername: getEnv("MAIL_USERNAME", ""),
-		MailPassword: getEnv("MAIL_PASSWORD", ""),
+		RedisAddr: getEnv("REDIS_ADDR"),
+
+		MailHost:     getEnv("MAIL_HOST"),
+		MailPort:     getEnvAsInt("MAIL_PORT"),
+		MailUsername: getEnv("MAIL_USERNAME"),
+		MailPassword: getEnv("MAIL_PASSWORD"),
 	}
+
+	if err := utils.Validate.Struct(config); err != nil {
+		panic(err)
+	}
+
+	return config
 }
 
-func getEnv(key, fallback string) string {
+func getEnv(key string) string {
 	if value, ok := os.LookupEnv(key); ok {
 		return value
 	}
 
-	return fallback
+	return ""
 }
 
-func getEnvAsInt(key string, fallback int) int {
+func getEnvAsInt(key string) int {
 	if value, ok := os.LookupEnv(key); ok {
 		i, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
-			return fallback
+			return -1
 		}
 		return int(i)
 	}
 
-	return fallback
+	return -1
 }
